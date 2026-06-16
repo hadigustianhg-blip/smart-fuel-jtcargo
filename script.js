@@ -10,6 +10,7 @@ let currentDriver = {
   role: "Driver Team",
   nopol: "",
   armada: "",
+  kmPerLiterNormal: "",
   barcodeMyPertaminaUrl: ""
 };
 
@@ -25,6 +26,7 @@ const inputDefaultValues = {
 };
 
 const SESSION_KEY = "jtCargoSmartFuelSession";
+const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const DUMMY_IMAGE_BASE64 = "DUMMY_BASE64_IMAGE";
 let currentGpsLocation = {
   latitude: "",
@@ -50,6 +52,9 @@ const loadingMessage = document.getElementById("loadingMessage");
 const barcodeMyPertaminaBtn = document.getElementById("barcodeMyPertaminaBtn");
 const barcodeMyPertaminaModal = document.getElementById("barcodeMyPertaminaModal");
 const barcodeMyPertaminaCloseBtn = document.getElementById("barcodeMyPertaminaCloseBtn");
+const barcodeFullscreenModal = document.getElementById("barcodeFullscreenModal");
+const barcodeFullscreenImage = document.getElementById("barcodeFullscreenImage");
+const barcodeFullscreenCloseBtn = document.getElementById("barcodeFullscreenCloseBtn");
 
 function normalizeNumber(value) {
   const cleaned = String(value || "")
@@ -243,8 +248,35 @@ async function handlePhotoChange(event, targetName) {
   }
 }
 
+function buildSession(user) {
+  return {
+    driverId: user.driverId || user.id || "",
+    username: user.username || "",
+    name: user.name || "-",
+    role: user.role || "Driver Team",
+    nopol: user.nopol || "",
+    armada: user.armada || user.jenisArmada || "",
+    kmPerLiterNormal: user.kmPerLiterNormal || "",
+    barcodeMyPertaminaUrl: getBarcodeMyPertaminaUrl(user),
+    loginAt: user.loginAt || new Date().toISOString()
+  };
+}
+
+function isSessionValid(session) {
+  if (!session || !session.driverId || !session.nopol || !session.loginAt) {
+    return false;
+  }
+
+  const loginAt = new Date(session.loginAt).getTime();
+  if (Number.isNaN(loginAt)) {
+    return false;
+  }
+
+  return Date.now() - loginAt <= SESSION_MAX_AGE_MS;
+}
+
 function saveSession(user) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  localStorage.setItem(SESSION_KEY, JSON.stringify(buildSession(user)));
 }
 
 function getSession() {
@@ -252,7 +284,12 @@ function getSession() {
   if (!rawSession) return null;
 
   try {
-    return JSON.parse(rawSession);
+    const session = JSON.parse(rawSession);
+    if (!isSessionValid(session)) {
+      clearSession();
+      return null;
+    }
+    return session;
   } catch (error) {
     clearSession();
     return null;
@@ -442,6 +479,7 @@ function setDashboardDriverInfo(driver) {
     role: driver.role || currentDriver.role,
     nopol: driver.nopol || currentDriver.nopol,
     armada: driver.armada || driver.jenisArmada || currentDriver.armada,
+    kmPerLiterNormal: driver.kmPerLiterNormal || currentDriver.kmPerLiterNormal || "",
     barcodeMyPertaminaUrl
   };
 
@@ -457,18 +495,21 @@ function openBarcodeMyPertaminaModal() {
   const barcodeUrl = String(currentDriver.barcodeMyPertaminaUrl || "").trim();
   const barcodeImage = document.getElementById("barcodeMyPertaminaImage");
   const emptyText = document.getElementById("barcodeMyPertaminaEmptyText");
+  const zoomHint = document.getElementById("barcodeZoomHintText");
 
   setText("barcodeNopolText", currentDriver.nopol || "-");
   setText("barcodeArmadaText", currentDriver.armada || "-");
 
-  if (barcodeImage && emptyText) {
+  if (barcodeImage && emptyText && zoomHint) {
     if (barcodeUrl) {
       barcodeImage.src = barcodeUrl;
       barcodeImage.classList.add("is-active");
+      zoomHint.classList.add("is-active");
       emptyText.classList.remove("is-active");
     } else {
       barcodeImage.removeAttribute("src");
       barcodeImage.classList.remove("is-active");
+      zoomHint.classList.remove("is-active");
       emptyText.classList.add("is-active");
     }
   }
@@ -480,6 +521,21 @@ function openBarcodeMyPertaminaModal() {
 function closeBarcodeMyPertaminaModal() {
   barcodeMyPertaminaModal.classList.remove("is-active");
   barcodeMyPertaminaModal.setAttribute("aria-hidden", "true");
+}
+
+function openBarcodeFullscreen() {
+  const barcodeUrl = String(currentDriver.barcodeMyPertaminaUrl || "").trim();
+  if (!barcodeUrl) return;
+
+  barcodeFullscreenImage.src = barcodeUrl;
+  barcodeFullscreenModal.classList.add("is-active");
+  barcodeFullscreenModal.setAttribute("aria-hidden", "false");
+}
+
+function closeBarcodeFullscreen() {
+  barcodeFullscreenModal.classList.remove("is-active");
+  barcodeFullscreenModal.setAttribute("aria-hidden", "true");
+  barcodeFullscreenImage.removeAttribute("src");
 }
 
 function setDashboardSummary(summary) {
@@ -607,7 +663,8 @@ async function handleLogin(event) {
       ...response.user,
       nopol: response.user.nopol || nopol,
       armada: response.user.armada || response.user.jenisArmada || selectedArmada.jenisArmada || "",
-      barcodeMyPertaminaUrl: getBarcodeMyPertaminaUrl(response.user) || selectedArmada.barcodeMyPertaminaUrl || ""
+      barcodeMyPertaminaUrl: getBarcodeMyPertaminaUrl(response.user) || selectedArmada.barcodeMyPertaminaUrl || "",
+      loginAt: new Date().toISOString()
     };
 
     saveSession(loginUser);
@@ -761,6 +818,27 @@ function bindPhotoButton(buttonId, inputId) {
   }
 }
 
+async function restoreSessionIfAvailable() {
+  const session = getSession();
+  if (!session) {
+    window.setTimeout(() => {
+      showScreen("login");
+    }, 2000);
+    return;
+  }
+
+  setDashboardDriverInfo(session);
+  window.setTimeout(() => {
+    showScreen("dashboard");
+  }, 2000);
+
+  try {
+    await loadDashboardData();
+  } catch (error) {
+    // Tetap gunakan session lokal jika dashboard belum bisa disegarkan.
+  }
+}
+
 function initApp() {
   setDashboardDriverInfo(currentDriver);
   setDashboardSummary({
@@ -772,10 +850,7 @@ function initApp() {
   renderHistoryDummy();
   resetInputForm();
   loadArmadaOptions();
-
-  window.setTimeout(() => {
-    showScreen("login");
-  }, 2000);
+  restoreSessionIfAvailable();
 
   loginForm.addEventListener("submit", handleLogin);
   fuelForm.addEventListener("submit", handleUploadBBM);
@@ -793,6 +868,13 @@ function initApp() {
   barcodeMyPertaminaModal.addEventListener("click", (event) => {
     if (event.target === barcodeMyPertaminaModal) {
       closeBarcodeMyPertaminaModal();
+    }
+  });
+  document.getElementById("barcodeMyPertaminaImage").addEventListener("click", openBarcodeFullscreen);
+  barcodeFullscreenCloseBtn.addEventListener("click", closeBarcodeFullscreen);
+  barcodeFullscreenModal.addEventListener("click", (event) => {
+    if (event.target === barcodeFullscreenModal) {
+      closeBarcodeFullscreen();
     }
   });
 
