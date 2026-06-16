@@ -159,6 +159,14 @@
             <p>Pastikan foto KM awal, KM akhir, dan nota BBM terlihat jelas sebelum upload.</p>
           </div>
         </div>
+        <button class="quick-card barcode-card" type="button" id="barcodeMyPertaminaBtn">
+          <svg aria-hidden="true"><use href="#icon-fuel"></use></svg>
+          <div>
+            <span>Armada terpilih</span>
+            <strong>Barcode MyPertamina</strong>
+            <p>Tampilkan barcode sesuai plat nomor login.</p>
+          </div>
+        </button>
       </section>
     </section>
 
@@ -329,6 +337,17 @@
       <div class="loading-card" role="status" aria-live="polite">
         <span class="loading-spinner" aria-hidden="true"></span>
         <p id="loadingMessage">Memproses...</p>
+      </div>
+    </div>
+
+    <div class="barcode-modal" id="barcodeMyPertaminaModal" aria-hidden="true">
+      <div class="barcode-modal-card" role="dialog" aria-modal="true" aria-labelledby="barcodeMyPertaminaTitle">
+        <h2 id="barcodeMyPertaminaTitle">Barcode MyPertamina</h2>
+        <p class="barcode-vehicle"><span>Nopol</span><strong id="barcodeNopolText">-</strong></p>
+        <p class="barcode-vehicle"><span>Jenis Armada</span><strong id="barcodeArmadaText">-</strong></p>
+        <img class="barcode-image" id="barcodeMyPertaminaImage" alt="Barcode MyPertamina">
+        <p class="barcode-empty" id="barcodeMyPertaminaEmptyText">Barcode MyPertamina belum tersedia untuk armada ini.</p>
+        <button class="primary-button close-button" type="button" id="barcodeMyPertaminaCloseBtn">Close</button>
       </div>
     </div>
   </main>
