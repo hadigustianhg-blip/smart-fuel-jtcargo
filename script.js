@@ -9,10 +9,12 @@ let currentDriver = {
   name: "-",
   role: "Driver Team",
   nopol: "",
-  armada: ""
+  armada: "",
+  barcodeMyPertaminaUrl: ""
 };
 
 let historyDummyData = [];
+let armadaByNopol = {};
 
 const inputDefaultValues = {
   kmAwal: "2783782 Km",
@@ -45,6 +47,9 @@ const loginBtn = document.getElementById("loginBtn");
 const uploadBbmBtn = document.getElementById("uploadBbmBtn");
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loadingMessage = document.getElementById("loadingMessage");
+const barcodeMyPertaminaBtn = document.getElementById("barcodeMyPertaminaBtn");
+const barcodeMyPertaminaModal = document.getElementById("barcodeMyPertaminaModal");
+const barcodeMyPertaminaCloseBtn = document.getElementById("barcodeMyPertaminaCloseBtn");
 
 function normalizeNumber(value) {
   const cleaned = String(value || "")
@@ -305,11 +310,23 @@ function apiGetArmadaList() {
   return apiPost("getArmadaList", {});
 }
 
+function getBarcodeMyPertaminaUrl(data) {
+  return String(
+    (data && (
+      data.barcodeMyPertaminaUrl
+      || data.BARCODE_MYPERTAMINA_URL
+      || data.BARCODE_URL
+      || data.QR_MYPERTAMINA
+    )) || ""
+  ).trim();
+}
+
 function renderArmadaOptions(armadaList) {
   const armadaSelect = document.getElementById("armadaSelect");
   if (!armadaSelect) return;
 
   armadaSelect.innerHTML = "";
+  armadaByNopol = {};
 
   const placeholder = document.createElement("option");
   placeholder.value = "";
@@ -320,6 +337,12 @@ function renderArmadaOptions(armadaList) {
     const nopol = String(armada.nopol || "").trim();
     const jenisArmada = String(armada.jenisArmada || "").trim();
     if (!nopol) return;
+
+    armadaByNopol[nopol] = {
+      nopol,
+      jenisArmada,
+      barcodeMyPertaminaUrl: getBarcodeMyPertaminaUrl(armada)
+    };
 
     const option = document.createElement("option");
     option.value = nopol;
@@ -411,12 +434,15 @@ function requestGpsLocation() {
 }
 
 function setDashboardDriverInfo(driver) {
+  const barcodeMyPertaminaUrl = getBarcodeMyPertaminaUrl(driver) || currentDriver.barcodeMyPertaminaUrl;
+
   currentDriver = {
     id: driver.id || driver.driverId || currentDriver.id,
-    name: driver.name,
-    role: driver.role,
-    nopol: driver.nopol,
-    armada: driver.armada
+    name: driver.name || currentDriver.name,
+    role: driver.role || currentDriver.role,
+    nopol: driver.nopol || currentDriver.nopol,
+    armada: driver.armada || driver.jenisArmada || currentDriver.armada,
+    barcodeMyPertaminaUrl
   };
 
   ["dashboard", "input", "success", "history", "setting"].forEach((screenName) => {
@@ -425,6 +451,35 @@ function setDashboardDriverInfo(driver) {
     setText(`${screenName}NopolText`, currentDriver.nopol);
     setText(`${screenName}ArmadaText`, currentDriver.armada);
   });
+}
+
+function openBarcodeMyPertaminaModal() {
+  const barcodeUrl = String(currentDriver.barcodeMyPertaminaUrl || "").trim();
+  const barcodeImage = document.getElementById("barcodeMyPertaminaImage");
+  const emptyText = document.getElementById("barcodeMyPertaminaEmptyText");
+
+  setText("barcodeNopolText", currentDriver.nopol || "-");
+  setText("barcodeArmadaText", currentDriver.armada || "-");
+
+  if (barcodeImage && emptyText) {
+    if (barcodeUrl) {
+      barcodeImage.src = barcodeUrl;
+      barcodeImage.classList.add("is-active");
+      emptyText.classList.remove("is-active");
+    } else {
+      barcodeImage.removeAttribute("src");
+      barcodeImage.classList.remove("is-active");
+      emptyText.classList.add("is-active");
+    }
+  }
+
+  barcodeMyPertaminaModal.classList.add("is-active");
+  barcodeMyPertaminaModal.setAttribute("aria-hidden", "false");
+}
+
+function closeBarcodeMyPertaminaModal() {
+  barcodeMyPertaminaModal.classList.remove("is-active");
+  barcodeMyPertaminaModal.setAttribute("aria-hidden", "true");
 }
 
 function setDashboardSummary(summary) {
@@ -547,8 +602,16 @@ async function handleLogin(event) {
       return;
     }
 
-    saveSession(response.user);
-    setDashboardDriverInfo(response.user);
+    const selectedArmada = armadaByNopol[nopol] || {};
+    const loginUser = {
+      ...response.user,
+      nopol: response.user.nopol || nopol,
+      armada: response.user.armada || response.user.jenisArmada || selectedArmada.jenisArmada || "",
+      barcodeMyPertaminaUrl: getBarcodeMyPertaminaUrl(response.user) || selectedArmada.barcodeMyPertaminaUrl || ""
+    };
+
+    saveSession(loginUser);
+    setDashboardDriverInfo(loginUser);
     await loadDashboardData();
     showScreen("dashboard");
   } catch (error) {
@@ -723,6 +786,14 @@ function initApp() {
       showScreen("login");
       hideLoading();
     }, 450);
+  });
+
+  barcodeMyPertaminaBtn.addEventListener("click", openBarcodeMyPertaminaModal);
+  barcodeMyPertaminaCloseBtn.addEventListener("click", closeBarcodeMyPertaminaModal);
+  barcodeMyPertaminaModal.addEventListener("click", (event) => {
+    if (event.target === barcodeMyPertaminaModal) {
+      closeBarcodeMyPertaminaModal();
+    }
   });
 
   bindPhotoButton("fotoKmAwalBtn", "fotoKmAwalInput");
