@@ -346,13 +346,19 @@
         <p class="barcode-vehicle"><span>Nopol</span><strong id="barcodeNopolText">-</strong></p>
         <p class="barcode-vehicle"><span>Jenis Armada</span><strong id="barcodeArmadaText">-</strong></p>
         <img class="barcode-image" id="barcodeMyPertaminaImage" alt="Barcode MyPertamina">
+        <small class="barcode-zoom-hint" id="barcodeZoomHintText">Klik barcode untuk perbesar</small>
         <p class="barcode-empty" id="barcodeMyPertaminaEmptyText">Barcode MyPertamina belum tersedia untuk armada ini.</p>
         <button class="primary-button close-button" type="button" id="barcodeMyPertaminaCloseBtn">Close</button>
       </div>
     </div>
+
+    <div class="barcode-fullscreen" id="barcodeFullscreenModal" aria-hidden="true">
+      <button class="barcode-fullscreen-close" type="button" id="barcodeFullscreenCloseBtn" aria-label="Close barcode fullscreen">X</button>
+      <img class="barcode-fullscreen-image" id="barcodeFullscreenImage" alt="Barcode MyPertamina fullscreen">
+    </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="script.js?v=20260616-ocr-km"></script>
+  <script src="script.js?v=20260616-ocr-km-barcode-session"></script>
 </body>
 </html>
