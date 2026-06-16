@@ -32,6 +32,8 @@ let currentGpsLocation = {
 let fotoKmAwalBase64 = "";
 let fotoKmAkhirBase64 = "";
 let fotoNotaBase64 = "";
+let kmAwalOcrRequestId = 0;
+let kmAkhirOcrRequestId = 0;
 
 const screens = document.querySelectorAll(".screen");
 const loginForm = document.getElementById("loginForm");
@@ -126,6 +128,78 @@ function fileToBase64(file) {
   });
 }
 
+function extractKmFromOcrText(text) {
+  const source = String(text || "");
+  const candidates = [];
+  const groupedMatches = source.match(/[0-9][0-9\s.,-]{2,}[0-9]/g) || [];
+  const digitMatches = source.match(/[0-9]{4,8}/g) || [];
+
+  [...groupedMatches, ...digitMatches].forEach((candidate) => {
+    const digits = String(candidate).replace(/[^0-9]/g, "");
+    if (digits.length >= 4 && digits.length <= 8) {
+      candidates.push(digits);
+    }
+  });
+
+  if (!candidates.length) return "";
+
+  candidates.sort((first, second) => {
+    if (second.length !== first.length) {
+      return second.length - first.length;
+    }
+    return Number(second) - Number(first);
+  });
+
+  return candidates[0];
+}
+
+async function readKmWithOcr(base64, targetName) {
+  const isKmAwal = targetName === "kmAwal";
+  const inputId = isKmAwal ? "kmAwalOcrText" : "kmAkhirOcrText";
+  const requestId = isKmAwal ? ++kmAwalOcrRequestId : ++kmAkhirOcrRequestId;
+  const loadingText = isKmAwal ? "Membaca KM awal..." : "Membaca KM akhir...";
+
+  if (!window.Tesseract || typeof window.Tesseract.recognize !== "function") {
+    alert("KM tidak terbaca, silakan input manual.");
+    setInputValue(inputId, "");
+    return;
+  }
+
+  showLoading(loadingText);
+
+  try {
+    const result = await window.Tesseract.recognize(base64, "eng", {
+      logger: () => {}
+    });
+    const text = result && result.data ? result.data.text : "";
+    const kmValue = extractKmFromOcrText(text);
+    const isLatestRequest = isKmAwal
+      ? requestId === kmAwalOcrRequestId
+      : requestId === kmAkhirOcrRequestId;
+
+    if (!isLatestRequest) return;
+
+    if (!kmValue) {
+      setInputValue(inputId, "");
+      alert("KM tidak terbaca, silakan input manual.");
+      return;
+    }
+
+    setInputValue(inputId, kmValue);
+  } catch (error) {
+    console.error("KM_OCR_ERROR", error);
+    setInputValue(inputId, "");
+    alert("KM tidak terbaca, silakan input manual.");
+  } finally {
+    const isLatestRequest = isKmAwal
+      ? requestId === kmAwalOcrRequestId
+      : requestId === kmAkhirOcrRequestId;
+    if (isLatestRequest) {
+      hideLoading();
+    }
+  }
+}
+
 async function handlePhotoChange(event, targetName) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
@@ -143,12 +217,14 @@ async function handlePhotoChange(event, targetName) {
       fotoKmAwalBase64 = base64;
       setPhotoPreview("fotoKmAwalBtn", "fotoKmAwalPreview", base64);
       console.log("fotoKmAwalBase64 length", fotoKmAwalBase64.length);
+      await readKmWithOcr(base64, "kmAwal");
     }
 
     if (targetName === "kmAkhir") {
       fotoKmAkhirBase64 = base64;
       setPhotoPreview("fotoKmAkhirBtn", "fotoKmAkhirPreview", base64);
       console.log("fotoKmAkhirBase64 length", fotoKmAkhirBase64.length);
+      await readKmWithOcr(base64, "kmAkhir");
     }
 
     if (targetName === "nota") {
